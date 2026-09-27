@@ -3,55 +3,47 @@
 An **unofficial, non-root YouTube APK** built from the original YouTube APK using
 [Morphe patches](https://github.com/MorpheApp/morphe-patches). This repository is
 an APK build pipeline, **not the Android app's source code**. The app's behavior
-and the existing patching/downloading logic have not been rewritten.
+and existing patching/downloading logic have not been rewritten.
 
-The output is named **Towfik Youtube**, uses the distinct install package
+The output is named **Towfik Youtube**, uses the separate install package
 `com.towfik.youtube`, and has a custom T/play launcher and notification icon.
 The original `com.google.android.youtube` IDs in `apps/*/youtube.json` are
 **intentionally unchanged**: they identify the unmodified APK to download.
-The Morphe GmsCore/Clone app and Custom branding patches change the output APK.
-For sign-in, install a compatible [GmsCore](https://github.com/ReVanced/GmsCore)
-on your non-root device. This build does not replace the official YouTube app.
+Morphe's GmsCore/Clone app and Custom branding patches change the output APK.
+For sign-in on a non-root device, install a compatible
+[GmsCore](https://github.com/ReVanced/GmsCore). This build does not replace the
+original YouTube app.
 
-## Get the APK
+## Build the debug-test APK
 
-Run **Actions → Build Towfik Youtube release APK → Run workflow** on the branch
-containing this workflow (or let the daily 06:00 UTC schedule run after merging
-it to the default branch). After a successful run, download the **one release
-APK** from [Releases](https://github.com/manishakhatun869-creator/towfiktube/releases/tag/towfik-youtube). The workflow also
-attaches the same APK as a run artifact. It fails if patching produces no APK,
-if signing fails, or if the APK has the wrong installed package/launcher label.
-No debug APK, YouTube Music APK, or manifest is published by this workflow.
+Choose **Actions → Build Towfik Youtube debug APK → Run workflow**. After it
+finishes, open the workflow run and download the **towfik-youtube-debug-apk**
+artifact. The ZIP contains `Towfik-Youtube-debug.apk`. The workflow runs only
+when manually dispatched; it does **not** create or update a GitHub Release,
+run on a schedule, or upload any other APK. Artifacts are kept for seven days.
 
-> The workflow must exist on the repository's default branch for GitHub's
-> manual dispatch button and schedule to appear. Until then, review/merge this
-> branch or use GitHub's available workflow controls for your repository.
+> This is a **debug-key-signed test APK**, not a Gradle `debug` variant: this
+> repository patches the production YouTube APK and has no Android app source
+> from which to compile a debuggable variant. The workflow makes a temporary
+> Android debug keystore on each run and never commits it. Keys change between
+> runs, so uninstall an older test build before installing the next one. It
+> also cannot update an APK signed with the previous public/release keystore.
+>
+> Do not distribute this APK as a production release.
+
+The build fails if no patched APK is created, its signature cannot be verified,
+or its installed package/launcher name does not match the Towfik branding.
+The workflow must be available on the repository's default branch for GitHub's
+manual Run workflow button to appear; merge this branch first if needed.
 
 ## Change the branding
 
-Edit `branding/youtube.json` for the display name, package name, or icon folder.
-The icon folder contains adaptive background and foreground PNGs per Android
-DPI, plus a white notification vector. If you change the package ID, also
-update the expected value in `.github/workflows/patch.yml`'s verification step.
+Edit `branding/youtube.json` to change the display name, package name, or icon
+folder. The icon folder contains adaptive background and foreground PNGs per
+Android DPI and a notification vector. If you change the package ID or name,
+also change the checks in `.github/workflows/patch.yml`. Do not replace the
+original package IDs in the downloader configs with your output ID.
 `patches/youtube-morphe.txt` leaves Morphe's default patch selection intact.
-Do not replace the package IDs in the downloader configs with your output ID.
-
-## Signing
-
-For initial builds, the existing repository's **public example keystore** signs
-APKs. It is not private or unique to you. For your own updates, generate and
-keep a private Android JKS keystore securely, then set **all four** repository
-Actions secrets:
-
-- `APK_KEYSTORE_BASE64`: base64 of the JKS file (one line)
-- `APK_KEYSTORE_PASSWORD`: store password
-- `APK_KEY_ALIAS`: signing key alias
-- `APK_KEY_PASSWORD`: key password
-
-The workflow decodes the keystore to the temporary runner and never commits it.
-Keep a backup: changing keys later prevents Android from installing updates over
-previous APKs signed with the old key. Existing installs signed with the public
-example key must be uninstalled before switching to your private key.
 
 ## Scope and attribution
 

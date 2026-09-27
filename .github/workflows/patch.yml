@@ -1,22 +1,14 @@
-name: Build Towfik Youtube release APK
+name: Build Towfik Youtube debug APK
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * *'
 
 permissions:
   contents: read
 
-concurrency:
-  group: towfik-youtube-release
-  cancel-in-progress: false
-
 jobs:
-  release-apk:
+  debug-apk:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     services:
       trawl:
         image: ghcr.io/germondai/trawl:latest
@@ -35,30 +27,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Optional: use a private signing key instead of the repository's public
-      # example key. All four secrets must be provided together.
-      - name: Configure signing
-        env:
-          KEYSTORE_BASE64: ${{ secrets.APK_KEYSTORE_BASE64 }}
-          APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
-          APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
-          APK_KEY_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
+      # This project patches an existing APK; there is no Gradle debug variant.
+      # Use Android's standard debug-key identity for a testing-only artifact.
+      - name: Create temporary debug signing key
         run: |
-          if [[ -n "$KEYSTORE_BASE64$APK_KEYSTORE_PASSWORD$APK_KEY_PASSWORD$APK_KEY_ALIAS" ]]; then
-            if [[ -z "$KEYSTORE_BASE64" || -z "$APK_KEYSTORE_PASSWORD" || -z "$APK_KEY_PASSWORD" || -z "$APK_KEY_ALIAS" ]]; then
-              echo 'Provide all four APK signing secrets, or none.' >&2
-              exit 1
-            fi
-            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/towfik.jks"
-            echo "APK_KEYSTORE=$RUNNER_TEMP/towfik.jks" >> "$GITHUB_ENV"
-            echo "APK_KEYSTORE_PASSWORD=$APK_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "APK_KEY_PASSWORD=$APK_KEY_PASSWORD" >> "$GITHUB_ENV"
-            echo "APK_KEY_ALIAS=$APK_KEY_ALIAS" >> "$GITHUB_ENV"
-          else
-            echo 'Using the repository example signing key; configure secrets for private releases.'
-          fi
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/debug.keystore" \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 \
+            -validity 10000 \
+            -dname 'CN=Android Debug,O=Android,C=US' \
+            -storepass android -keypass android
+          echo "APK_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          echo 'APK_KEYSTORE_PASSWORD=android' >> "$GITHUB_ENV"
+          echo 'APK_KEY_PASSWORD=android' >> "$GITHUB_ENV"
+          echo 'APK_KEY_ALIAS=androiddebugkey' >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
+      - name: Build testing APK
         env:
           APP_NAME: youtube
           SOURCE: morphe
@@ -67,50 +51,27 @@ jobs:
           TRAWL_URL: http://localhost:8191
         run: python -m src
 
-      - name: Verify release APK
-        id: apk
+      - name: Verify and name debug APK
         run: |
           shopt -s nullglob
           apks=(youtube-universal-morphe-v*.apk)
           if (( ${#apks[@]} != 1 )); then
-            echo "Expected exactly one signed YouTube APK; found ${#apks[@]}." >&2
+            echo "Expected one patched YouTube APK, found ${#apks[@]}." >&2
             exit 1
           fi
           apk="${apks[0]}"
-          build_tools="$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$build_tools/apksigner" verify --verbose "$apk"
           "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/badging.txt"
           grep -F "package: name='com.towfik.youtube'" "$RUNNER_TEMP/badging.txt"
-          grep -F "launchable-activity:" "$RUNNER_TEMP/badging.txt" | grep -F "label='Towfik Youtube'"
-          echo "file=$apk" >> "$GITHUB_OUTPUT"
+          grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | grep -F "label='Towfik Youtube'"
+          mv -- "$apk" Towfik-Youtube-debug.apk
 
-      - name: Upload release APK artifact
+      - name: Upload debug APK as workflow artifact only
         uses: actions/upload-artifact@v4
         with:
-          name: towfik-youtube-release-apk
-          path: ${{ steps.apk.outputs.file }}
+          name: towfik-youtube-debug-apk
+          path: Towfik-Youtube-debug.apk
           if-no-files-found: error
-
-      - name: Publish release APK only
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APK: ${{ steps.apk.outputs.file }}
-        run: |
-          if gh release view towfik-youtube >/dev/null 2>&1; then
-            # Upload first; leave the old release intact if upload fails.
-            gh release upload towfik-youtube "$APK" --clobber
-            # The filename includes the app version. Remove older assets only
-            # after the current APK has been uploaded successfully.
-            gh release view towfik-youtube --json assets --jq '.assets[].name' | while IFS= read -r asset; do
-              if [[ "$asset" != "$APK" ]]; then
-                gh release delete-asset towfik-youtube "$asset" --yes
-              fi
-            done
-            gh release edit towfik-youtube --title 'Towfik Youtube' --notes 'Signed non-root YouTube APK patched with Morphe. Unofficial; requires GmsCore to sign in.' --latest
-          else
-            gh release create towfik-youtube "$APK" \
-              --target "$GITHUB_SHA" \
-              --title 'Towfik Youtube' \
-              --notes 'Signed non-root YouTube APK patched with Morphe. Unofficial; requires GmsCore to sign in.' \
-              --latest
-          fi
+          retention-days: 7
