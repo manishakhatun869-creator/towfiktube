@@ -146,6 +146,20 @@ def run_build(app_name: str, source: str, arch: str = "universal") -> str:
                 elif line.startswith('+'):
                     include_patches.extend(["-e", line[1:].strip()])
 
+    # Only the YouTube/Morphe build is rebranded. The store configs retain the
+    # original package ID so the downloader still fetches the official base APK.
+    branding_options = []
+    if app_name == "youtube" and source == "morphe":
+        with Path("branding/youtube.json").open(encoding="utf-8") as f:
+            branding = json.load(f)
+        branding_options = [
+            "-e", "Custom branding",
+            "-e", "GmsCore support",
+            f"-OcustomName={branding['app_name']}",
+            f"-OcustomIcon={Path(branding['icon_directory']).resolve()}",
+            f"-OpackageName={branding['package_name']}",
+        ]
+
     for attempt_idx, ver in enumerate(versions_to_try):
         if attempt_idx > 0:
             logging.warning(
@@ -264,8 +278,9 @@ def run_build(app_name: str, source: str, arch: str = "universal") -> str:
                 morphe_cmd = [
                     "java", "-jar", str(cli),
                     "patch", "--patches", str(patches),
-                    "--out", str(output_apk), str(input_apk),
-                    *exclude_patches, *include_patches
+                    "--out", str(output_apk),
+                    *exclude_patches, *include_patches, *branding_options,
+                    str(input_apk)
                 ]
                 utils.run_process(morphe_cmd, capture=True, stream=True)
             else:
@@ -308,13 +323,18 @@ def run_build(app_name: str, source: str, arch: str = "universal") -> str:
         if not apksigner:
             raise RuntimeError("apksigner not found")
 
+        # apksigner reads passwords from the environment, not command arguments,
+        # so failed subprocess errors cannot expose private signing secrets.
+        os.environ.setdefault("APK_KEYSTORE_PASSWORD", "public")
+        os.environ.setdefault("APK_KEY_PASSWORD", "public")
+
         try:
             utils.run_process([
                 str(apksigner), "sign", "--verbose",
-                "--ks", "keystore/public.jks",
-                "--ks-pass", "pass:public",
-                "--key-pass", "pass:public",
-                "--ks-key-alias", "public",
+                "--ks", getenv("APK_KEYSTORE", "keystore/public.jks"),
+                "--ks-pass", "env:APK_KEYSTORE_PASSWORD",
+                "--key-pass", "env:APK_KEY_PASSWORD",
+                "--ks-key-alias", getenv("APK_KEY_ALIAS", "public"),
                 "--in", str(output_apk), "--out", str(signed_apk)
             ], capture=True, stream=True)
         except Exception as e:
@@ -324,10 +344,10 @@ def run_build(app_name: str, source: str, arch: str = "universal") -> str:
             utils.run_process([
                 str(apksigner), "sign", "--verbose",
                 "--min-sdk-version", "21",
-                "--ks", "keystore/public.jks",
-                "--ks-pass", "pass:public",
-                "--key-pass", "pass:public",
-                "--ks-key-alias", "public",
+                "--ks", getenv("APK_KEYSTORE", "keystore/public.jks"),
+                "--ks-pass", "env:APK_KEYSTORE_PASSWORD",
+                "--key-pass", "env:APK_KEY_PASSWORD",
+                "--ks-key-alias", getenv("APK_KEY_ALIAS", "public"),
                 "--in", str(output_apk), "--out", str(signed_apk)
             ], capture=True, stream=True)
 

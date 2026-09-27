@@ -1,0 +1,2 @@
+# Keep Morphe's default YouTube patches. Branding and the non-root package ID
+# are selected in branding/youtube.json and passed as CLI options by the builder.

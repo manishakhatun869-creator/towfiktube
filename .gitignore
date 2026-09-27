@@ -1,2 +1,11 @@
 __pycache__/
 NUL
+*.apk
+*.apkm
+*.xapk
+*.apks
+*.mpp
+*.jar
+*.jks
+tools/
+morphe-data/
