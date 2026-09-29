@@ -152,12 +152,16 @@ def run_build(app_name: str, source: str, arch: str = "universal") -> str:
     if app_name == "youtube" and source == "morphe":
         with Path("branding/youtube.json").open(encoding="utf-8") as f:
             branding = json.load(f)
+        # Morphe scopes each -O option to the immediately preceding -e patch.
+        # GmsCore depends on Clone app; its packageName option belongs to Clone
+        # app, while customName/customIcon belong to Custom branding.
         branding_options = [
             "-e", "Custom branding",
-            "-e", "GmsCore support",
             f"-OcustomName={branding['app_name']}",
             f"-OcustomIcon={Path(branding['icon_directory']).resolve()}",
+            "-e", "Clone app",
             f"-OpackageName={branding['package_name']}",
+            "-e", "GmsCore support",
         ]
 
     for attempt_idx, ver in enumerate(versions_to_try):
