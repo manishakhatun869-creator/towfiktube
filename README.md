@@ -14,27 +14,37 @@ For sign-in on a non-root device, install a compatible
 [GmsCore](https://github.com/ReVanced/GmsCore). This build does not replace the
 original YouTube app.
 
-## Build the debug-test APK
+## Build and download the release APK in Actions
 
-Choose **Actions → Build Towfik Youtube debug APK → Run workflow**. After it
-finishes, open the workflow run and download the **towfik-youtube-debug-apk**
-artifact. The ZIP contains `Towfik-Youtube-debug.apk`. The workflow runs only
-when manually dispatched; it does **not** create or update a GitHub Release,
-run on a schedule, or upload any other APK. Artifacts are kept for seven days.
+Open **Actions → Build Towfik Youtube release APK → Run workflow**. Select the
+branch containing this workflow and start the run. Open the completed run and
+download the **towfik-youtube-release-apk** artifact. Its ZIP contains only
+`Towfik-Youtube-release.apk` (one universal APK, not a debug-key build). The
+artifact remains available for 14 days. This workflow does **not** create a
+GitHub Release or any debug APK.
 
-> This is a **debug-key-signed test APK**, not a Gradle `debug` variant: this
-> repository patches the production YouTube APK and has no Android app source
-> from which to compile a debuggable variant. The workflow makes a temporary
-> Android debug keystore on each run and never commits it. Keys change between
-> runs, so uninstall an older test build before installing the next one. It
-> also cannot update an APK signed with the previous public/release keystore.
->
-> Do not distribute this APK as a production release.
+Pushing to this session's `arena/01a0e305-towfiktube` branch also starts a build.
+This lets the branch produce an Actions run even though the current GitHub
+connection cannot call the workflow-dispatch API. After the workflow is on the
+default branch, the normal **Run workflow** button can be used manually.
 
 The build fails if no patched APK is created, its signature cannot be verified,
-or its installed package/launcher name does not match the Towfik branding.
-The workflow must be available on the repository's default branch for GitHub's
-manual Run workflow button to appear; merge this branch first if needed.
+or the installed package/launcher name does not match the Towfik branding.
+
+## Signing
+
+By default the existing repository's **public example keystore** signs APKs.
+It is not private or unique to you. For your own updateable APKs, set **all
+four** repository Actions secrets before building:
+
+- `APK_KEYSTORE_BASE64`: one-line base64 of your JKS file
+- `APK_KEYSTORE_PASSWORD`: keystore password
+- `APK_KEY_ALIAS`: signing key alias
+- `APK_KEY_PASSWORD`: key password
+
+The workflow decodes your keystore to the temporary runner only. Back it up:
+changing keys prevents Android from updating an existing install signed with
+the old key (including builds signed with the public example key).
 
 ## Change the branding
 
