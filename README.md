@@ -6,7 +6,8 @@ an APK build pipeline, **not the Android app's source code**. The app's behavior
 and existing patching/downloading logic have not been rewritten.
 
 The output is named **Towfik Youtube**, uses the separate install package
-`com.towfik.youtube`, and has a custom T/play launcher and notification icon.
+`com.towfik.youtube`, and has a custom Towfik/Youtube launcher logo (with a
+matching themed and notification icon). See [logo preview](branding/logo-preview.png).
 The original `com.google.android.youtube` IDs in `apps/*/youtube.json` are
 **intentionally unchanged**: they identify the unmodified APK to download.
 Morphe's GmsCore/Clone app and Custom branding patches change the output APK.
@@ -50,7 +51,8 @@ the old key (including builds signed with the public example key).
 
 Edit `branding/youtube.json` to change the display name, package name, or icon
 folder. The icon folder contains adaptive background and foreground PNGs per
-Android DPI and a notification vector. If you change the package ID or name,
+Android DPI, plus themed and notification vectors. Regenerate the PNGs with
+`bash branding/generate_icons.sh` (requires ImageMagick). If you change the package ID or name,
 also change the checks in `.github/workflows/patch.yml`. Do not replace the
 original package IDs in the downloader configs with your output ID.
 `patches/youtube-morphe.txt` leaves Morphe's default patch selection intact.
