@@ -66,14 +66,27 @@ jobs:
           ARCH: universal
           GITHUB_TOKEN: ${{ github.token }}
           TRAWL_URL: http://localhost:8191
-        run: python -m src
+        run: |
+          # The existing builder may return success after skipping a download.
+          # Report its errors as Actions annotations if it produced no APK.
+          status=0
+          python -m src 2>&1 | tee "$RUNNER_TEMP/build.log" || status=$?
+          shopt -s nullglob
+          apks=(youtube-universal-morphe-v*.apk)
+          if (( status != 0 || ${#apks[@]} != 1 )); then
+            grep -Ei 'error|failed|not found|skipping|exception' "$RUNNER_TEMP/build.log" | tail -12 | while IFS= read -r line; do
+              echo "::notice::${line:0:500}"
+            done || true
+            echo "::error::Build exited $status and produced ${#apks[@]} signed APK(s); see Build release APK logs for details."
+            exit 1
+          fi
 
       - name: Verify and name release APK
         run: |
           shopt -s nullglob
           apks=(youtube-universal-morphe-v*.apk)
           if (( ${#apks[@]} != 1 )); then
-            echo "Expected one patched YouTube APK, found ${#apks[@]}." >&2
+            echo "::error::Expected one patched YouTube APK, found ${#apks[@]}."
             exit 1
           fi
           apk="${apks[0]}"
@@ -81,8 +94,14 @@ jobs:
           build_tools="$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$build_tools/apksigner" verify --verbose "$apk"
           "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.towfik.youtube'" "$RUNNER_TEMP/badging.txt"
-          grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | grep -F "label='Towfik Youtube'"
+          if ! grep -F "package: name='com.towfik.youtube'" "$RUNNER_TEMP/badging.txt"; then
+            echo "::error::Wrong package: $(grep '^package:' "$RUNNER_TEMP/badging.txt" | head -1)"
+            exit 1
+          fi
+          if ! grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | grep -F "label='Towfik Youtube'"; then
+            echo "::error::Wrong launcher: $(grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | head -1)"
+            exit 1
+          fi
           mv -- "$apk" Towfik-Youtube-release.apk
 
       - name: Upload release APK to this Actions run
