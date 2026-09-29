@@ -98,8 +98,11 @@ jobs:
             echo "::error::Wrong package: $(grep '^package:' "$RUNNER_TEMP/badging.txt" | head -1)"
             exit 1
           fi
-          if ! grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | grep -F "label='Towfik Youtube'"; then
-            echo "::error::Wrong launcher: $(grep -F 'launchable-activity:' "$RUNNER_TEMP/badging.txt" | head -1)"
+          # Morphe switches launch aliases at runtime; aapt may not emit a
+          # launchable-activity line for the chosen alias. The application
+          # label is the stable installed app-name check.
+          if ! grep -Fx "application-label:'Towfik Youtube'" "$RUNNER_TEMP/badging.txt"; then
+            echo "::error::Wrong app name: $(grep '^application-label:' "$RUNNER_TEMP/badging.txt" | head -1)"
             exit 1
           fi
           mv -- "$apk" Towfik-Youtube-release.apk
